@@ -1,131 +1,233 @@
 module.exports = async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(200).end();
-
-  const { message } = req.body;
-  if (!message || !message.text) return res.status(200).end();
-
-  const chatId = message.chat.id;
-  const text = message.text.trim();
-
-  if (text.startsWith('/start')) {
-    await sendMessage(chatId, `👋 Welcome to Foodie Listing Pro!\n\nType any product keyword to generate a full Shopee listing.\n\nExample: Dyson V15 vacuum\nExample: 佳德 蔥軋餅`);
+  if (req.method !== 'POST') {
     return res.status(200).end();
   }
 
-  if (text.startsWith('/')) return res.status(200).end();
+  try {
+    const { message } = req.body;
 
-  await sendMessage(chatId, `⏳ Writing listing copy for "${text}"... please wait!`);
+    if (!message || !message.text) {
+      return res.status(200).end();
+    }
 
-  const prompt = `You are a Shopee Singapore copywriter. Given a product keyword, write listing content.
+    const chatId = message.chat.id;
+    const text = message.text.trim();
 
-IMPORTANT: Reply with ONLY a JSON object, nothing else. No markdown, no backticks, no explanation.
+    // START COMMAND
+    if (text.startsWith('/start')) {
+      await sendMessage(
+        chatId,
+        `👋 Welcome to Foodie Listing Pro!
 
-Product keyword: ${text}
+Type any product keyword to generate a full Shopee listing.
+
+Example:
+Dyson V15 vacuum
+
+Example:
+佳德 蔥軋餅`
+      );
+
+      return res.status(200).end();
+    }
+
+    // IGNORE OTHER COMMANDS
+    if (text.startsWith('/')) {
+      return res.status(200).end();
+    }
+
+    // LOADING MESSAGE
+    await sendMessage(
+      chatId,
+      `⏳ Writing listing copy for "${text}"... please wait!`
+    );
+
+    // PROMPT
+    const prompt = `You are a Shopee Singapore copywriter.
+
+Given a product keyword, write listing content.
+
+IMPORTANT:
+Reply with ONLY a JSON object.
+No markdown.
+No backticks.
+No explanation.
+
+Product keyword:
+${text}
 
 Return this exact JSON structure:
+
 {
   "en_title": "catchy Shopee title under 60 chars",
-  "en_copy": "3 paragraph description for Singapore shoppers, conversational tone",
+  "en_copy": "3 paragraph description for Singapore shoppers",
   "en_seo": "keyword1, keyword2, keyword3, keyword4, keyword5",
   "en_points": "point1|point2|point3|point4|point5",
+
   "zh_title": "吸引人的蝦皮標題60字內",
-  "zh_copy": "3段口語化商品文案，貼近消費者痛點",
+  "zh_copy": "3段口語化商品文案",
   "zh_seo": "關鍵字1, 關鍵字2, 關鍵字3, 關鍵字4, 關鍵字5",
   "zh_points": "特點1|特點2|特點3|特點4|特點5"
 }`;
 
-  try {
-    const aiRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        'HTTP-Referer': 'https://foodielisting.vercel.app',
-        'X-Title': 'Foodie Listing Pro'
-      },
-body: JSON.stringify({
-model: 'meta-llama/llama-3.3-70b-instruct:free',
-  messages: [{ role: 'user', content: prompt }],
-  temperature: 0.7,
-  max_tokens: 1200
-})
-      })
-    });
+    // OPENROUTER REQUEST
+    const aiRes = await fetch(
+      'https://openrouter.ai/api/v1/chat/completions',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          'HTTP-Referer': 'https://foodielisting.vercel.app',
+          'X-Title': 'Foodie Listing Pro'
+        },
+
+        body: JSON.stringify({
+          model: 'meta-llama/llama-3.3-70b-instruct:free',
+
+          messages: [
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+
+          temperature: 0.7,
+          max_tokens: 1200
+        })
+      }
+    );
 
     const aiData = await aiRes.json();
-    console.log('Status:', aiRes.status);
-    console.log('Response:', JSON.stringify(aiData).substring(0, 500));
 
+    console.log('STATUS:', aiRes.status);
+    console.log('DATA:', JSON.stringify(aiData).substring(0, 1000));
+
+    // OPENROUTER ERROR
     if (!aiRes.ok) {
-      await sendMessage(chatId, `⚠️ Error ${aiRes.status}: ${aiData.error?.message || 'Unknown'}. Please try again.`);
+      await sendMessage(
+        chatId,
+        `⚠️ OpenRouter Error ${aiRes.status}
+
+${aiData.error?.message || 'Unknown error'}`
+      );
+
       return res.status(200).end();
     }
 
-    const raw = aiData.choices?.[0]?.message?.content || '';
+    // AI CONTENT
+    const raw =
+      aiData?.choices?.[0]?.message?.content || '';
+
     if (!raw) {
-      await sendMessage(chatId, `⚠️ Empty response from AI. Please try again.`);
+      await sendMessage(
+        chatId,
+        '⚠️ Empty AI response.'
+      );
+
       return res.status(200).end();
     }
 
-const clean = raw.replace(/```json|```/g, '').trim();
+    // CLEAN JSON
+    const clean = raw
+      .replace(/```json/g, '')
+      .replace(/```/g, '')
+      .trim();
 
-let d;
+    console.log('RAW CLEAN:', clean);
 
-try {
-  d = JSON.parse(clean);
-} catch (e) {
-  console.log('RAW AI RESPONSE:', clean);
+    let d;
 
-  await sendMessage(
-    chatId,
-    '⚠️ AI returned invalid JSON. Please try again.'
-  );
+    // SAFE JSON PARSE
+    try {
+      d = JSON.parse(clean);
+    } catch (e) {
+      console.log('JSON ERROR:', e.message);
 
-  return res.status(200).end();
-}
+      await sendMessage(
+        chatId,
+        '⚠️ AI returned invalid JSON. Please try again.'
+      );
+
+      return res.status(200).end();
+    }
+
+    // BULLET POINTS
+    const enPoints = (d.en_points || '')
+      .split('|')
+      .map(p => `• ${p.trim()}`)
+      .join('\n');
+
+    const zhPoints = (d.zh_points || '')
+      .split('|')
+      .map(p => `• ${p.trim()}`)
+      .join('\n');
+
+    // FINAL MESSAGE
+    const reply = `🛍 Listing Ready!
+
 ━━━ 🇸🇬 ENGLISH ━━━
 
 📌 Title
-${d.en_title}
+${d.en_title || '-'}
 
 ✍️ Copy
-${d.en_copy}
+${d.en_copy || '-'}
 
 ✅ Highlights
-${enPoints}
+${enPoints || '-'}
 
 🔍 SEO
-${d.en_seo}
+${d.en_seo || '-'}
 
 ━━━ 🇨🇳 中文 ━━━
 
 📌 標題
-${d.zh_title}
+${d.zh_title || '-'}
 
 ✍️ 文案
-${d.zh_copy}
+${d.zh_copy || '-'}
 
 ✅ 特點
-${zhPoints}
+${zhPoints || '-'}
 
 🔍 SEO
-${d.zh_seo}`;
+${d.zh_seo || '-'}`;
 
-    await sendMessage(chatId, reply);
+    // TELEGRAM LIMIT
+    await sendMessage(
+      chatId,
+      reply.substring(0, 4000)
+    );
+
+    return res.status(200).end();
 
   } catch (err) {
-    console.error('Error:', err.message);
-    await sendMessage(chatId, `⚠️ Error: ${err.message}. Please try again.`);
+    console.error('MAIN ERROR:', err);
+
+    return res.status(200).json({
+      error: err.message
+    });
   }
+};
 
-  return res.status(200).end();
-}
-
+// TELEGRAM SEND FUNCTION
 async function sendMessage(chatId, text) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
-  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text })
-  });
+
+  await fetch(
+    `https://api.telegram.org/bot${token}/sendMessage`,
+    {
+      method: 'POST',
+
+      headers: {
+        'Content-Type': 'application/json'
+      },
+
+      body: JSON.stringify({
+        chat_id: chatId,
+        text
+      })
+    }
+  );
 }
