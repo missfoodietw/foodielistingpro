@@ -8,35 +8,30 @@ export default async function handler(req, res) {
   const text = message.text.trim();
 
   if (text.startsWith('/start')) {
-    await sendMessage(chatId,
-      `👋 Welcome to Foodie Listing Pro!\n\nJust type any product keyword and I'll generate a full Shopee listing for you.\n\nExample:\nDyson V15 cordless vacuum\nMUJI organic cotton pyjamas\n佳德 蔥軋餅`
-    );
+    await sendMessage(chatId, `👋 Welcome to Foodie Listing Pro!\n\nType any product keyword to generate a full Shopee listing.\n\nExample: Dyson V15 vacuum\nExample: 佳德 蔥軋餅`);
     return res.status(200).end();
   }
 
   if (text.startsWith('/')) return res.status(200).end();
 
-  await sendMessage(chatId, `⏳ Generating listing copy for "${text}"... give me a few seconds!`);
+  await sendMessage(chatId, `⏳ Writing listing copy for "${text}"... please wait!`);
 
-  const systemPrompt = `You are an expert e-commerce copywriter specialising in Shopee Singapore listings.
-Your writing is conversational, benefit-driven, and tailored to Singapore shoppers.
-Given a product keyword, generate compelling listing content.
-You MUST reply with ONLY a raw JSON object. No markdown, no backticks, no explanation, nothing else before or after the JSON.
+  const prompt = `You are a Shopee Singapore copywriter. Given a product keyword, write listing content.
 
-Required JSON structure:
+IMPORTANT: Reply with ONLY a JSON object, nothing else. No markdown, no backticks, no explanation.
+
+Product keyword: ${text}
+
+Return this exact JSON structure:
 {
-  "en": {
-    "title": "Shopee SG product title (catchy, keyword-rich, under 60 chars)",
-    "copy": "3-4 paragraph product description, paragraphs separated by two newlines",
-    "seo": ["kw1","kw2","kw3","kw4","kw5","kw6"],
-    "points": ["Highlight 1","Highlight 2","Highlight 3","Highlight 4","Highlight 5"]
-  },
-  "zh": {
-    "title": "蝦皮商品標題60字內",
-    "copy": "3-4段商品文案，段落間空一行",
-    "seo": ["關鍵字1","關鍵字2","關鍵字3","關鍵字4","關鍵字5","關鍵字6"],
-    "points": ["商品特點1","商品特點2","商品特點3","商品特點4","商品特點5"]
-  }
+  "en_title": "catchy Shopee title under 60 chars",
+  "en_copy": "3 paragraph description for Singapore shoppers, conversational tone",
+  "en_seo": "keyword1, keyword2, keyword3, keyword4, keyword5",
+  "en_points": "point1|point2|point3|point4|point5",
+  "zh_title": "吸引人的蝦皮標題60字內",
+  "zh_copy": "3段口語化商品文案，貼近消費者痛點",
+  "zh_seo": "關鍵字1, 關鍵字2, 關鍵字3, 關鍵字4, 關鍵字5",
+  "zh_points": "特點1|特點2|特點3|特點4|特點5"
 }`;
 
   try {
@@ -46,80 +41,70 @@ Required JSON structure:
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
         'HTTP-Referer': 'https://foodielisting.vercel.app',
-        'X-Title': 'Foodie Listing Pro Bot'
+        'X-Title': 'Foodie Listing Pro'
       },
       body: JSON.stringify({
-model: 'meta-llama/llama-3.3-70b-instruct:free',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: `Product keyword: ${text}` }
-        ],
+        model: 'deepseek/deepseek-chat:free',
+        messages: [{ role: 'user', content: prompt }]
       })
     });
 
     const aiData = await aiRes.json();
+    console.log('Status:', aiRes.status);
+    console.log('Response:', JSON.stringify(aiData).substring(0, 500));
 
     if (!aiRes.ok) {
-      console.error('OpenRouter error:', JSON.stringify(aiData));
-      await sendMessage(chatId, `⚠️ AI service error: ${aiData.error?.message || 'Unknown error'}. Please try again.`);
+      await sendMessage(chatId, `⚠️ Error ${aiRes.status}: ${aiData.error?.message || 'Unknown'}. Please try again.`);
       return res.status(200).end();
     }
 
     const raw = aiData.choices?.[0]?.message?.content || '';
-    console.log('Full aiData:', JSON.stringify(aiData));
-
-
-    if (!raw || raw.trim() === '') {
-      await sendMessage(chatId, `⚠️ AI returned empty response. Please try again.`);
+    if (!raw) {
+      await sendMessage(chatId, `⚠️ Empty response from AI. Please try again.`);
       return res.status(200).end();
     }
 
     const clean = raw.replace(/```json|```/g, '').trim();
-    const data = JSON.parse(clean);
+    const d = JSON.parse(clean);
 
-    const en = data.en || {};
-    const zh = data.zh || {};
+    const enPoints = (d.en_points || '').split('|').map(p => `• ${p.trim()}`).join('\n');
+    const zhPoints = (d.zh_points || '').split('|').map(p => `• ${p.trim()}`).join('\n');
 
-    const enPoints = (en.points || []).map(p => `• ${p}`).join('\n');
-    const zhPoints = (zh.points || []).map(p => `• ${p}`).join('\n');
-    const enSeo = (en.seo || []).join(' | ');
-    const zhSeo = (zh.seo || []).join(' | ');
+    const reply = `🛍 Listing Ready!
 
-    const reply = `🛍 Shopee Listing Ready!
-
-━━━━━━━━ 🇸🇬 ENGLISH ━━━━━━━━
+━━━ 🇸🇬 ENGLISH ━━━
 
 📌 Title
-${en.title || ''}
+${d.en_title}
 
-✍️ Listing Copy
-${en.copy || ''}
+✍️ Copy
+${d.en_copy}
 
 ✅ Highlights
 ${enPoints}
 
-🔍 SEO Keywords
-${enSeo}
+🔍 SEO
+${d.en_seo}
 
-━━━━━━━━ 🇨🇳 中文 ━━━━━━━━
+━━━ 🇨🇳 中文 ━━━
 
 📌 標題
-${zh.title || ''}
+${d.zh_title}
 
-✍️ 商品文案
-${zh.copy || ''}
+✍️ 文案
+${d.zh_copy}
 
-✅ 商品特點
+✅ 特點
 ${zhPoints}
 
-🔍 SEO 關鍵字
-${zhSeo}`;
+🔍 SEO
+${d.zh_seo}`;
 
     await sendMessage(chatId, reply);
 
   } catch (err) {
-    console.error('Handler error:', err.message);
-    await sendMessage(chatId, `⚠️ Sorry, something went wrong (${err.message}). Please try again.`);
+    console.error('Error:', err.message);
+    await sendMessage(chatId, `⚠️ Error: ${err.message}. Please try again.`);
   }
 
   return res.status(200).end();
@@ -127,16 +112,9 @@ ${zhSeo}`;
 
 async function sendMessage(chatId, text) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
-  const resp = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text: text
-    })
+    body: JSON.stringify({ chat_id: chatId, text })
   });
-  if (!resp.ok) {
-    const err = await resp.json();
-    console.error('Telegram sendMessage error:', JSON.stringify(err));
-  }
 }
