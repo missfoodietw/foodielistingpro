@@ -43,9 +43,12 @@ Return this exact JSON structure:
         'HTTP-Referer': 'https://foodielisting.vercel.app',
         'X-Title': 'Foodie Listing Pro'
       },
-      body: JSON.stringify({
-        model: 'deepseek/deepseek-chat:free',
-        messages: [{ role: 'user', content: prompt }]
+body: JSON.stringify({
+  model: 'deepseek/deepseek-chat',
+  messages: [{ role: 'user', content: prompt }],
+  temperature: 0.7,
+  max_tokens: 1200
+})
       })
     });
 
@@ -65,13 +68,15 @@ Return this exact JSON structure:
     }
 
     const clean = raw.replace(/```json|```/g, '').trim();
-    const d = JSON.parse(clean);
+   let d;
 
-    const enPoints = (d.en_points || '').split('|').map(p => `• ${p.trim()}`).join('\n');
-    const zhPoints = (d.zh_points || '').split('|').map(p => `• ${p.trim()}`).join('\n');
-
-    const reply = `🛍 Listing Ready!
-
+try {
+  d = JSON.parse(clean);
+} catch (e) {
+  console.log(clean);
+  await sendMessage(chatId, '⚠️ AI returned invalid JSON. Please try again.');
+  return res.status(200).end();
+}
 ━━━ 🇸🇬 ENGLISH ━━━
 
 📌 Title
