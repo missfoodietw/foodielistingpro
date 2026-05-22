@@ -1,4 +1,4 @@
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(200).end();
 
   const { message } = req.body;
@@ -44,7 +44,7 @@ Return this exact JSON structure:
         'X-Title': 'Foodie Listing Pro'
       },
 body: JSON.stringify({
-  model: 'deepseek/deepseek-chat',
+model: 'meta-llama/llama-3.3-70b-instruct:free',
   messages: [{ role: 'user', content: prompt }],
   temperature: 0.7,
   max_tokens: 1200
@@ -67,14 +67,20 @@ body: JSON.stringify({
       return res.status(200).end();
     }
 
-    const clean = raw.replace(/```json|```/g, '').trim();
-   let d;
+const clean = raw.replace(/```json|```/g, '').trim();
+
+let d;
 
 try {
   d = JSON.parse(clean);
 } catch (e) {
-  console.log(clean);
-  await sendMessage(chatId, '⚠️ AI returned invalid JSON. Please try again.');
+  console.log('RAW AI RESPONSE:', clean);
+
+  await sendMessage(
+    chatId,
+    '⚠️ AI returned invalid JSON. Please try again.'
+  );
+
   return res.status(200).end();
 }
 ━━━ 🇸🇬 ENGLISH ━━━
