@@ -42,7 +42,7 @@ Example:
       `⏳ Writing listing copy for "${text}"... please wait!`
     );
 
-    // PROMPT
+    // AI PROMPT
     const prompt = `You are a Shopee Singapore copywriter.
 
 Given a product keyword, write listing content.
@@ -72,7 +72,7 @@ Return this exact JSON structure:
 
     // GEMINI API
     const aiRes = await fetch(
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' +
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=' +
         process.env.GEMINI_API_KEY,
       {
         method: 'POST',
@@ -120,7 +120,7 @@ ${JSON.stringify(aiData).substring(0, 500)}`
       return res.status(200).end();
     }
 
-    // RAW TEXT
+    // RAW AI TEXT
     const raw =
       aiData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
@@ -158,7 +158,7 @@ ${JSON.stringify(aiData).substring(0, 500)}`
       return res.status(200).end();
     }
 
-    // BULLET POINTS
+    // FORMAT BULLETS
     const enPoints = (d.en_points || '')
       .split('|')
       .map(p => `• ${p.trim()}`)
@@ -169,7 +169,7 @@ ${JSON.stringify(aiData).substring(0, 500)}`
       .map(p => `• ${p.trim()}`)
       .join('\n');
 
-    // FINAL MESSAGE
+    // FINAL REPLY
     const reply = `🛍 Listing Ready!
 
 ━━━ 🇸🇬 ENGLISH ━━━
@@ -200,7 +200,7 @@ ${zhPoints || '-'}
 🔍 SEO
 ${d.zh_seo || '-'}`;
 
-    // TELEGRAM LIMIT
+    // TELEGRAM MESSAGE LIMIT
     await sendMessage(
       chatId,
       reply.substring(0, 4000)
@@ -211,15 +211,22 @@ ${d.zh_seo || '-'}`;
   } catch (err) {
     console.error('MAIN ERROR:', err);
 
+    await sendMessage(
+      process.env.ADMIN_CHAT_ID || '',
+      `❌ BOT ERROR:\n${err.message}`
+    );
+
     return res.status(200).json({
       error: err.message
     });
   }
-};
+}
 
-// SEND TELEGRAM MESSAGE
+// TELEGRAM SEND FUNCTION
 async function sendMessage(chatId, text) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
+
+  if (!chatId) return;
 
   await fetch(
     `https://api.telegram.org/bot${token}/sendMessage`,
