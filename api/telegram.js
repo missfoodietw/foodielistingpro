@@ -48,7 +48,7 @@ Example:
 Given a product keyword, write listing content.
 
 IMPORTANT:
-Reply with ONLY a valid JSON object.
+Reply with ONLY valid JSON.
 No markdown.
 No backticks.
 No explanation.
@@ -72,7 +72,7 @@ Return this exact JSON structure:
 
     // GEMINI API
     const aiRes = await fetch(
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' +
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' +
         process.env.GEMINI_API_KEY,
       {
         method: 'POST',
@@ -120,7 +120,7 @@ ${JSON.stringify(aiData).substring(0, 500)}`
       return res.status(200).end();
     }
 
-    // GET RAW TEXT
+    // RAW TEXT
     const raw =
       aiData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
@@ -169,7 +169,7 @@ ${JSON.stringify(aiData).substring(0, 500)}`
       .map(p => `• ${p.trim()}`)
       .join('\n');
 
-    // FINAL REPLY
+    // FINAL MESSAGE
     const reply = `🛍 Listing Ready!
 
 ━━━ 🇸🇬 ENGLISH ━━━
