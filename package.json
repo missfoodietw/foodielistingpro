@@ -1,0 +1,8 @@
+{
+  "name": "shopee-sg-copy-generator",
+  "version": "1.0.0",
+  "description": "AI-powered Shopee SG listing copy generator",
+  "scripts": {
+    "dev": "vercel dev"
+  }
+}
