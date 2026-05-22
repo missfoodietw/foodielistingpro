@@ -7,17 +7,15 @@ export default async function handler(req, res) {
   const chatId = message.chat.id;
   const text = message.text.trim();
 
-  // ignore commands other than /start
   if (text.startsWith('/start')) {
     await sendMessage(chatId,
-      `👋 *Welcome to CopyShop SG Bot!*\n\nJust type any product keyword and I'll generate a full Shopee listing for you.\n\n*Example:*\n\`Dyson V15 cordless vacuum\`\n\`MUJI organic cotton pyjamas\`\n\`SK-II Facial Treatment Essence\``
+      `👋 *Welcome to Foodie Listing Pro\\!*\n\nJust type any product keyword and I'll generate a full Shopee listing for you\\.\n\n*Example:*\n\`Dyson V15 cordless vacuum\`\n\`MUJI organic cotton pyjamas\`\n\`佳德 蔥軋餅\``
     );
     return res.status(200).end();
   }
 
   if (text.startsWith('/')) return res.status(200).end();
 
-  // acknowledge immediately
   await sendMessage(chatId, `⏳ Generating listing copy for *"${escMd(text)}"*\\.\\.\\. give me a few seconds\\!`);
 
   const systemPrompt = `You are an expert e-commerce copywriter specialising in Shopee Singapore listings.
@@ -42,23 +40,25 @@ JSON structure:
 }`;
 
   try {
-    const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
+    const aiRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01'
+        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        'HTTP-Referer': 'https://shopee-listing.vercel.app',
+        'X-Title': 'Foodie Listing Pro Bot'
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1500,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: `Product keyword: ${text}` }]
+        model: 'meta-llama/llama-4-maverick:free',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: `Product keyword: ${text}` }
+        ]
       })
     });
 
     const aiData = await aiRes.json();
-    const raw = (aiData.content || []).map(b => b.text || '').join('');
+    const raw = aiData.choices?.[0]?.message?.content || '';
     const clean = raw.replace(/```json|```/g, '').trim();
     const data = JSON.parse(clean);
 
@@ -100,13 +100,12 @@ JSON structure:
     await sendMessage(chatId, reply);
   } catch (err) {
     console.error(err);
-    await sendMessage(chatId, `⚠️ Sorry, something went wrong\\. Please try again in a moment\\.`);
+    await sendMessage(chatId, `⚠️ Sorry, something went wrong\\. Please try again\\.`);
   }
 
   return res.status(200).end();
 }
 
-// Escape special chars for Telegram MarkdownV2
 function escMd(str) {
   if (!str) return '';
   return str.replace(/[_*[\]()~`>#+\-=|{}.!\\]/g, '\\$&');
