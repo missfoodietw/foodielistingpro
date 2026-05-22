@@ -19,7 +19,7 @@ module.exports = async function handler(req, res) {
         chatId,
         `👋 Welcome to Foodie Listing Pro!
 
-Type any product keyword to generate a full Shopee listing.
+Type any product keyword to generate a Shopee listing.
 
 Example:
 Dyson V15 vacuum
@@ -48,7 +48,7 @@ Example:
 Given a product keyword, write listing content.
 
 IMPORTANT:
-Reply with ONLY a JSON object.
+Reply with ONLY a valid JSON object.
 No markdown.
 No backticks.
 No explanation.
@@ -60,40 +60,42 @@ Return this exact JSON structure:
 
 {
   "en_title": "catchy Shopee title under 60 chars",
-  "en_copy": "3 paragraph description for Singapore shoppers",
+  "en_copy": "3 paragraph English product description",
   "en_seo": "keyword1, keyword2, keyword3, keyword4, keyword5",
   "en_points": "point1|point2|point3|point4|point5",
 
   "zh_title": "吸引人的蝦皮標題60字內",
-  "zh_copy": "3段口語化商品文案",
+  "zh_copy": "3段中文商品文案",
   "zh_seo": "關鍵字1, 關鍵字2, 關鍵字3, 關鍵字4, 關鍵字5",
   "zh_points": "特點1|特點2|特點3|特點4|特點5"
 }`;
 
-    // OPENROUTER REQUEST
+    // GEMINI API
     const aiRes = await fetch(
-      'https://openrouter.ai/api/v1/chat/completions',
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' +
+        process.env.GEMINI_API_KEY,
       {
         method: 'POST',
+
         headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-          'HTTP-Referer': 'https://foodielisting.vercel.app',
-          'X-Title': 'Foodie Listing Pro'
+          'Content-Type': 'application/json'
         },
 
         body: JSON.stringify({
-          model: 'meta-llama/llama-3.3-70b-instruct:free',
-
-          messages: [
+          contents: [
             {
-              role: 'user',
-              content: prompt
+              parts: [
+                {
+                  text: prompt
+                }
+              ]
             }
           ],
 
-          temperature: 0.7,
-          max_tokens: 1200
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 1200
+          }
         })
       }
     );
@@ -101,23 +103,26 @@ Return this exact JSON structure:
     const aiData = await aiRes.json();
 
     console.log('STATUS:', aiRes.status);
-    console.log('DATA:', JSON.stringify(aiData).substring(0, 1000));
+    console.log(
+      'DATA:',
+      JSON.stringify(aiData).substring(0, 1000)
+    );
 
-    // OPENROUTER ERROR
+    // API ERROR
     if (!aiRes.ok) {
       await sendMessage(
         chatId,
-        `⚠️ OpenRouter Error ${aiRes.status}
+        `⚠️ Gemini Error ${aiRes.status}
 
-${aiData.error?.message || 'Unknown error'}`
+${JSON.stringify(aiData).substring(0, 500)}`
       );
 
       return res.status(200).end();
     }
 
-    // AI CONTENT
+    // GET RAW TEXT
     const raw =
-      aiData?.choices?.[0]?.message?.content || '';
+      aiData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
     if (!raw) {
       await sendMessage(
@@ -143,6 +148,7 @@ ${aiData.error?.message || 'Unknown error'}`
       d = JSON.parse(clean);
     } catch (e) {
       console.log('JSON ERROR:', e.message);
+      console.log(clean);
 
       await sendMessage(
         chatId,
@@ -163,7 +169,7 @@ ${aiData.error?.message || 'Unknown error'}`
       .map(p => `• ${p.trim()}`)
       .join('\n');
 
-    // FINAL MESSAGE
+    // FINAL REPLY
     const reply = `🛍 Listing Ready!
 
 ━━━ 🇸🇬 ENGLISH ━━━
@@ -211,7 +217,7 @@ ${d.zh_seo || '-'}`;
   }
 };
 
-// TELEGRAM SEND FUNCTION
+// SEND TELEGRAM MESSAGE
 async function sendMessage(chatId, text) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
 
