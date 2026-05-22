@@ -68,7 +68,7 @@ Required JSON structure:
 
     const raw = aiData.choices?.[0]?.message?.content || '';
     console.log('Full aiData:', JSON.stringify(aiData));
-    console.log('Raw AI response:', raw);
+
 
     if (!raw || raw.trim() === '') {
       await sendMessage(chatId, `⚠️ AI returned empty response. Please try again.`);
